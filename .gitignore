@@ -11,3 +11,6 @@ __pycache__/
 # Local denylist of terms that must never be committed (see .denylist.example)
 .denylist
 .claude/settings.local.json
+
+# Obsidian app state if this folder is ever opened as a vault
+.obsidian/
