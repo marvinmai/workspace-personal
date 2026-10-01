@@ -41,7 +41,8 @@ python3 -m bootstrap link
 ```
 Registers the `ai-personal` marketplace and installs/updates `personal@ai-personal`, copies `rules/*.md`
 to `~/.claude/rules/`, merges the permissions fragment into `~/.claude/settings.json` (a timestamped
-backup is kept), and installs the shell helpers. Existing unmanaged rule files are never overwritten.
+backup is kept), installs the shell helpers, and (Linux/macOS, only if WezTerm is installed) deploys the
+WezTerm config. Existing unmanaged rule files are never overwritten.
 
 ### `clone`: pick and clone repositories
 ```
@@ -78,11 +79,25 @@ on first run, never committed. Edit it by hand:
   "repos_dir": "/home/marvin/dev",
   "ai_personal_dir": "/home/marvin/dev/ai-personal",
   "notes_dir": "/home/marvin/dev/ai-projects",
-  "sources": [{ "type": "github", "owner": "marvinmai" }]
+  "sources": [{ "type": "github", "owner": "marvinmai" }],
+  "wezterm_shell": "login"
 }
 ```
 New employer or org = add one entry to `sources`; remove it when you leave. Changes take effect
 immediately, no re-link needed.
+
+## WezTerm
+
+The terminal's look and behavior live in the repo: `applications/wezterm/wezterm.base.lua` (theme, font,
+opacity, tab bar, split keys `Ctrl+Shift+D` / `Ctrl+Shift+E`). `link` (or
+`python3 applications/wezterm/install_wezterm.py --shell-approach login`) writes it into the WezTerm config
+as a managed `base` block, plus a `shell-approach` block. Anything you add by hand outside those blocks is kept.
+
+- Config file: Linux/macOS `~/.config/wezterm/wezterm.lua` (an existing `~/.wezterm.lua` is reused), Windows `~/.wezterm.lua`.
+- Shell on Linux/macOS: `"wezterm_shell": "login"` (default) uses your `$SHELL`, so bash; `"pwsh"` forces PowerShell 7.
+  Change it in the config, then run `link` again and restart WezTerm.
+- To change the look: edit `wezterm.base.lua` and run `link`. A backup of your pre-framework config is in `~/.config/wezterm/`.
+- Windows: run `py -3 applications\wezterm\install_wezterm.py` yourself; the shell (WSL/pwsh/cmd) is an interactive choice there.
 
 ## In Claude Code
 

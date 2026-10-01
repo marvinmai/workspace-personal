@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -104,10 +105,37 @@ def link_settings(ai_dir: Path, dry_run: bool) -> str:
     return f"OK settings merged into {path} (backup kept)"
 
 
+def wezterm_command(cfg: dict) -> list[str] | None:
+    """Command that deploys the shared WezTerm config, or None when not applicable.
+
+    Linux/macOS only, and only if WezTerm is installed: `link` never installs
+    packages. On Windows the shell choice (wsl/pwsh/cmd) is an interactive decision,
+    so run applications/wezterm/install_wezterm.py yourself there.
+    """
+    if sys.platform.startswith("win") or not shutil.which("wezterm"):
+        return None
+    script = config.WORKSPACE_ROOT / "applications" / "wezterm" / "install_wezterm.py"
+    approach = cfg.get("wezterm_shell", "login")
+    return [sys.executable, str(script), "--shell-approach", approach]
+
+
+def link_wezterm(cfg: dict, dry_run: bool) -> str:
+    cmd = wezterm_command(cfg)
+    if cmd is None:
+        return "OK wezterm not applicable here (not installed, or Windows: run its installer by hand)"
+    if dry_run:
+        return "would run: " + " ".join(cmd)
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if res.returncode != 0:
+        return f"FAIL wezterm config: {(res.stderr or res.stdout).strip()[-200:]}"
+    return "OK wezterm config deployed (restart WezTerm)"
+
+
 def run(dry_run: bool = False) -> int:
     cfg = config.ensure_config()
     ai_dir = Path(cfg["ai_personal_dir"]).expanduser()
-    lines = [link_plugin(ai_dir, dry_run), *link_rules(ai_dir, dry_run), link_settings(ai_dir, dry_run)]
+    lines = [link_plugin(ai_dir, dry_run), *link_rules(ai_dir, dry_run), link_settings(ai_dir, dry_run),
+             link_wezterm(cfg, dry_run)]
     lines += [f"shell: {m}" for m in shell.install(dry_run)]
     for line in lines:
         print(line)

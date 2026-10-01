@@ -9,6 +9,7 @@ Keys:
   ai_personal_dir  checkout of the ai-personal plugin repo
   notes_dir        the notes vault (Obsidian vault + git repo)
   sources          list of {"type": "github", "owner": "<user-or-org>"}
+  wezterm_shell    "login" (default; your $SHELL) or "pwsh"  (Linux/macOS)
 """
 from __future__ import annotations
 
@@ -57,6 +58,7 @@ def default_config() -> dict:
         "ai_personal_dir": str(repos_dir / "ai-personal"),
         "notes_dir": str(repos_dir / "ai-projects"),
         "sources": [{"type": "github", "owner": owner}] if owner else [],
+        "wezterm_shell": "login",
     }
 
 

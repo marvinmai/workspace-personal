@@ -5,8 +5,10 @@ Linux, and macOS:
   - installs wezterm via the platform's package manager (winget / brew / pacman / apt / dnf)
   - on Windows, lets you pick the default shell approach - WSL2, PowerShell 7
     (pwsh.exe), or cmd.exe - explaining the trade-offs of each; on Linux/macOS,
-    only PowerShell 7 (pwsh) is available
-  - wires the selected choice into .wezterm.lua
+    your login shell (default, WezTerm's own behavior) or PowerShell 7 (pwsh)
+  - deploys the shared look/behavior from wezterm.base.lua as a managed "base" block
+  - wires the selected choice into the WezTerm config (Linux/macOS:
+    ~/.config/wezterm/wezterm.lua; Windows: ~/.wezterm.lua)
   - on the "pwsh" approach: installs PowerShell 7 if it isn't already on PATH
 
 The "wsl" approach only points WezTerm at an existing WSL instance (default
@@ -85,13 +87,18 @@ Which shell should WezTerm launch by default?
 NON_WINDOWS_SHELL_APPROACH_HELP = """
 Which shell should WezTerm launch by default?
 
-  pwsh  Launch into PowerShell 7 (`pwsh`).
-        + One shell binary/profile shareable across Linux and macOS
-        - Most real-world docs/tutorials/CI assume bash, so translating
-          commands is a recurring source of friction
+  login  Your account's login shell ($SHELL: bash, zsh, ...). This is WezTerm's
+         own default, so nothing is forced. Recommended on Linux/macOS.
+         + No extra dependency, every helper in this workspace already works
+  pwsh   Launch into PowerShell 7 (`pwsh`).
+         + One shell binary/profile shareable across Linux and macOS
+         - Most real-world docs/tutorials/CI assume bash, so translating
+           commands is a recurring source of friction
 
 The `wsl` and `cmd` approaches are Windows-only and are not available here.
 """
+
+BASE_FILE = Path(__file__).resolve().with_name("wezterm.base.lua")
 
 
 def step(msg):
@@ -305,7 +312,7 @@ def install_pwsh():
 # --- 2. Ask which shell approach to use ---------------------------------------
 
 def supported_shell_approaches():
-    return ("wsl", "pwsh", "cmd") if IS_WINDOWS else ("pwsh",)
+    return ("wsl", "pwsh", "cmd") if IS_WINDOWS else ("login", "pwsh")
 
 
 def prompt_shell_approach():
@@ -315,6 +322,8 @@ def prompt_shell_approach():
     choices_text = "/".join(choices)
     while True:
         choice = ask(f"Choose [{choices_text}]: ").strip().lower()
+        if not choice and not IS_WINDOWS:
+            return "login"
         if choice in choices:
             return choice
         print(f"Please type one of: {', '.join(choices)}.")
@@ -360,7 +369,21 @@ def wezterm_config_path(override=None):
     override = override or os.environ.get("WEZTERM_CONFIG_FILE")
     if override:
         return Path(override)
-    return Path.home() / ".wezterm.lua"
+    legacy = Path.home() / ".wezterm.lua"
+    if IS_WINDOWS:
+        return legacy
+    # Linux/macOS: WezTerm prefers $XDG_CONFIG_HOME/wezterm/wezterm.lua, then
+    # ~/.config/wezterm/wezterm.lua, then ~/.wezterm.lua. Reuse whichever exists
+    # (first match wins, as in WezTerm); create the XDG location otherwise.
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    candidates = ([Path(xdg) / "wezterm" / "wezterm.lua"] if xdg else []) + [
+        Path.home() / ".config" / "wezterm" / "wezterm.lua",
+        legacy,
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def lua_string_literal(value):
@@ -396,6 +419,10 @@ def shell_approach_lines(approach, wsl_instance_name):
         return [
             f"config.default_domain = {lua_string_literal(f'WSL:{wsl_instance_name}')}"
         ]
+    if approach == "login":
+        if IS_WINDOWS:
+            raise ValueError("the 'login' shell approach is only available on Linux/macOS")
+        return ["-- login shell: WezTerm launches $SHELL (no default_prog override)"]
     if approach == "pwsh":
         executable = "pwsh.exe" if IS_WINDOWS else "pwsh"
         return [
@@ -444,16 +471,15 @@ def shell_switching_lines(wsl_distros, pwsh_available):
         ["config.launch_menu = {"]
         + menu
         + ["}",
-           "config.keys = {",
-           "  { key = 'E', mods = 'CTRL|SHIFT',",
-           "    action = wezterm.action.ShowLauncherArgs "
-           "{ flags = 'FUZZY|LAUNCH_MENU_ITEMS' } },",
-           "}"]
+           "config.keys = config.keys or {}",
+           "table.insert(config.keys, { key = 'E', mods = 'CTRL|SHIFT',",
+           "  action = wezterm.action.ShowLauncherArgs "
+           "{ flags = 'FUZZY|LAUNCH_MENU_ITEMS' } })"]
     )
 
 
 CONFLICT_PATTERN = r"^\s*config\.(default_domain|default_prog)\s*="
-SWITCHING_CONFLICT_PATTERN = r"^\s*config\.(keys|launch_menu)\s*="
+SWITCHING_CONFLICT_PATTERN = r"^\s*config\.launch_menu\s*="
 
 
 class UnsupportedConfigFormatError(ValueError):
@@ -850,6 +876,20 @@ def apply_shell_approach(approach, wsl_instance_name, config_file=None):
     )
 
 
+def base_lines():
+    """The shared look/behavior lines from wezterm.base.lua (a fragment, not a full config)."""
+    text = BASE_FILE.read_text(encoding="utf-8").replace("\r\n", "\n")
+    return text.rstrip("\n").split("\n")
+
+
+def apply_base(config_file=None):
+    step("Deploying the shared WezTerm base (look and behavior)")
+    config_path = wezterm_config_path(config_file)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    upsert_marked_block(config_path, "base", base_lines())
+    print(f"Config file: {config_path}")
+
+
 def apply_shell_switching(wsl_distros, pwsh_available, config_file=None):
     step("Wiring the launch menu + launcher key for switching shells")
 
@@ -862,7 +902,7 @@ def apply_shell_switching(wsl_distros, pwsh_available, config_file=None):
     upsert_marked_block(
         config_path, "shell-switching", lines,
         conflict_pattern=SWITCHING_CONFLICT_PATTERN,
-        conflict_label="config.keys/launch_menu",
+        conflict_label="config.launch_menu",
     )
     print("Press Ctrl+Shift+E in WezTerm to pick a shell (WSL / PowerShell / cmd).")
 
@@ -884,7 +924,10 @@ def main():
                               help="Path to the WezTerm Lua config to update (overrides "
                                    "WEZTERM_CONFIG_FILE and the platform default).")
     parser.add_argument("--skip-config", action="store_true",
-                         help="Don't touch .wezterm.lua at all - just install packages.")
+                         help="Don't touch the WezTerm config at all - just install packages.")
+    parser.add_argument("--no-base", dest="base", action="store_false", default=True,
+                         help="Skip the shared base block from wezterm.base.lua "
+                              "(look and behavior).")
     parser.add_argument("--no-shell-switching", dest="shell_switching",
                          action="store_false", default=True,
                          help="Skip the 'shell-switching' block (launch menu + Ctrl+Shift+E "
@@ -906,6 +949,9 @@ def main():
     elif approach == "pwsh":
         if not install_pwsh():
             return 1
+
+    if args.base and not args.skip_config:
+        apply_base(args.config_file)
 
     if approach and not args.skip_config:
         apply_shell_approach(approach, args.wsl_instance_name, args.config_file)

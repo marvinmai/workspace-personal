@@ -8,7 +8,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import contextlib  # noqa: E402
+import importlib.util  # noqa: E402
+import io  # noqa: E402
+
 from bootstrap import clone, config, link, picker, shell  # noqa: E402
+
+_spec = importlib.util.spec_from_file_location(
+    "install_wezterm",
+    Path(__file__).resolve().parent.parent / "applications" / "wezterm" / "install_wezterm.py")
+wez = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(wez)
 
 REPOS = [{"name": n} for n in ("alpha-api", "beta-api", "alpha-ui", "gamma")]
 
@@ -145,6 +155,89 @@ class Link(IsolatedHome):
         self.assertEqual(merged["permissions"]["ask"], ["Bash(git push:*)"])
         self.assertEqual(len(list(sp.parent.glob("settings.json.bak-*"))), 1)
         self.assertIn("up to date", link.link_settings(ai, False))
+
+
+class WeztermInstaller(IsolatedHome):
+    def setUp(self):
+        super().setUp()
+        self._win = wez.IS_WINDOWS
+        os.environ.pop("WEZTERM_CONFIG_FILE", None)
+        os.environ.pop("XDG_CONFIG_HOME", None)
+        wez.IS_WINDOWS = False
+
+    def tearDown(self):
+        wez.IS_WINDOWS = self._win
+        super().tearDown()
+
+    def test_default_path_is_xdg_location_when_nothing_exists(self):
+        self.assertEqual(wez.wezterm_config_path(),
+                         self.home / ".config" / "wezterm" / "wezterm.lua")
+
+    def test_existing_legacy_file_is_reused(self):
+        (self.home / ".wezterm.lua").write_text("x", encoding="utf-8")
+        self.assertEqual(wez.wezterm_config_path(), self.home / ".wezterm.lua")
+
+    def test_xdg_file_wins_over_legacy(self):
+        xdg = self.home / ".config" / "wezterm" / "wezterm.lua"
+        xdg.parent.mkdir(parents=True)
+        xdg.write_text("x", encoding="utf-8")
+        (self.home / ".wezterm.lua").write_text("y", encoding="utf-8")
+        self.assertEqual(wez.wezterm_config_path(), xdg)
+
+    def test_windows_keeps_legacy_path(self):
+        wez.IS_WINDOWS = True
+        self.assertEqual(wez.wezterm_config_path(), self.home / ".wezterm.lua")
+
+    def test_approaches_per_platform(self):
+        self.assertEqual(wez.supported_shell_approaches(), ("login", "pwsh"))
+        wez.IS_WINDOWS = True
+        self.assertEqual(wez.supported_shell_approaches(), ("wsl", "pwsh", "cmd"))
+
+    def test_login_approach_sets_no_default_prog(self):
+        lines = wez.shell_approach_lines("login", "x")
+        self.assertFalse(any("default_prog" in l.split("--")[0] for l in lines))
+        wez.IS_WINDOWS = True
+        with self.assertRaises(ValueError):
+            wez.shell_approach_lines("login", "x")
+
+    def test_base_then_login_is_idempotent_and_keeps_user_content(self):
+        cfg = self.home / "wezterm.lua"
+        cfg.write_text("local wezterm = require 'wezterm'\nlocal config = wezterm.config_builder()\n"
+                       "config.tab_max_width = 40\nreturn config\n", encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()):
+            for _ in range(2):
+                wez.upsert_marked_block(cfg, "base", wez.base_lines())
+                wez.upsert_marked_block(cfg, "shell-approach", wez.shell_approach_lines("login", "x"),
+                                        conflict_pattern=wez.CONFLICT_PATTERN)
+        text = cfg.read_text(encoding="utf-8")
+        self.assertEqual(text.count(">>> wezterm-setup: base >>>"), 1)
+        self.assertEqual(text.count(">>> wezterm-setup: shell-approach >>>"), 1)
+        self.assertIn("config.tab_max_width = 40", text)
+        self.assertIn('config.color_scheme = "Catppuccin Mocha"', text)
+        self.assertTrue(text.rstrip().endswith("return config"))
+
+    def test_base_file_has_no_shell_choice_and_no_employer(self):
+        text = wez.BASE_FILE.read_text(encoding="utf-8")
+        self.assertNotIn("default_prog", text)
+        self.assertNotIn("default_domain", text)
+
+
+class LinkWezterm(IsolatedHome):
+    def test_command_uses_configured_shell(self):
+        orig_which, orig_platform = link.shutil.which, link.sys.platform
+        try:
+            link.shutil.which = lambda name: "/usr/bin/wezterm" if name == "wezterm" else None
+            link.sys.platform = "linux"
+            cmd = link.wezterm_command({"wezterm_shell": "pwsh"})
+            self.assertEqual(cmd[-2:], ["--shell-approach", "pwsh"])
+            self.assertEqual(link.wezterm_command({})[-1], "login")
+            link.shutil.which = lambda name: None
+            self.assertIsNone(link.wezterm_command({}))
+            link.shutil.which = lambda name: "/x"
+            link.sys.platform = "win32"
+            self.assertIsNone(link.wezterm_command({}))
+        finally:
+            link.shutil.which, link.sys.platform = orig_which, orig_platform
 
 
 if __name__ == "__main__":
