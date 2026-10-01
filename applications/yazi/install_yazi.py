@@ -953,6 +953,60 @@ def ensure_sh_on_path():
     return True
 
 
+# Newer piper commits declare `@since` a yazi release newer than the crates.io one
+# and show "yazi version too old" instead of a preview. This is the last commit
+# that supports yazi 26.1.22+ (including dark/light mode).
+PIPER_REV = "b9946d9"
+PIPER_DEP_RE = re.compile(
+    r'\[\[plugin\.deps\]\]\s*\n(?:(?!\[).*\n)*?use\s*=\s*"yazi-rs/plugins:piper"[^\n]*\n'
+    r'(?:(?!\[)[^\n]*\n?)*'
+)
+
+
+def pin_piper_plugin(package_toml):
+    """Make package.toml pin piper to PIPER_REV (dropping any stale hash)."""
+    content = read_text_preserving_newlines(package_toml) if package_toml.exists() else ""
+    newline = config_newline(content)
+    entry = newline.join((
+        "[[plugin.deps]]",
+        'use = "yazi-rs/plugins:piper"',
+        f'rev = "{PIPER_REV}"',
+    )) + newline
+    if PIPER_DEP_RE.search(content):
+        updated = PIPER_DEP_RE.sub(lambda _m: entry + newline, content, count=1)
+    else:
+        updated = entry + newline + content
+    if updated != content:
+        package_toml.parent.mkdir(parents=True, exist_ok=True)
+        write_text_preserving_newlines(package_toml, updated)
+        print(f"Pinned piper to {PIPER_REV} in {package_toml}.")
+    return updated != content
+
+
+CHARM_APT_SETUP = (
+    "sudo mkdir -p /etc/apt/keyrings && "
+    "curl -fsSL https://repo.charm.sh/apt/gpg.key "
+    "| sudo gpg --dearmor --yes -o /etc/apt/keyrings/charm.gpg && "
+    "echo 'deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *' "
+    "| sudo tee /etc/apt/sources.list.d/charm.list >/dev/null && "
+    "sudo apt-get update -qq"
+)
+
+
+def ensure_charm_apt_repo():
+    """glow isn't in the default Debian/Ubuntu repos; add Charm's apt repo first."""
+    if not (IS_LINUX and shutil.which("apt-get")) or shutil.which("brew"):
+        return True
+    if Path("/etc/apt/sources.list.d/charm.list").exists():
+        return True
+    step("Adding the Charm apt repository (provides glow)")
+    result = run(["sh", "-c", CHARM_APT_SETUP])
+    if result.returncode != 0:
+        print(f"Could not add the Charm apt repo (exit code {result.returncode}).")
+        return False
+    return True
+
+
 def configure_markdown_preview(config_dir=None):
     shell_status = ensure_sh_on_path()
     if shell_status is None:
@@ -960,11 +1014,17 @@ def configure_markdown_preview(config_dir=None):
     if not shell_status:
         return False
 
-    if not install_package(
+    if not shutil.which("glow") and not ensure_charm_apt_repo():
+        return False
+
+    if shutil.which("glow"):
+        print("glow is already installed - skipping.")
+    elif not install_package(
         "glow",
         winget_id="charmbracelet.glow",
         brew_pkg="glow",
         pacman_pkg="glow",
+        apt_pkg="glow",
         dnf_pkg="glow",
         manual_hint=(
             "Debian/Ubuntu needs the Charm apt repo first - see "
@@ -974,15 +1034,19 @@ def configure_markdown_preview(config_dir=None):
         return False
 
     step("Installing the piper previewer plugin")
-    if shutil.which("ya"):
-        result = run(["ya", "pkg", "add", "yazi-rs/plugins:piper"])
-        if result.returncode != 0:
-            print(f"Could not install the piper plugin (exit code {result.returncode}). "
-                  "Re-run after resolving the yazi package-manager error.")
-            return False
-    else:
+    if not shutil.which("ya"):
         print("`ya` (yazi's package manager CLI) was not found on PATH - "
               "install yazi first, then re-run this script.")
+        return False
+    config_path = Path(config_dir) if config_dir else yazi_config_dir()
+    repinned = pin_piper_plugin(config_path / "package.toml")
+    # Switching revs makes the old checkout's hash stale, which yazi reports as
+    # "local modifications"; --discard replaces it with the pinned revision.
+    result = run(["ya", "pkg", "install", *(["--discard"] if repinned else [])],
+                 env={**os.environ, "YAZI_CONFIG_HOME": str(config_path)})
+    if result.returncode != 0:
+        print(f"Could not install the piper plugin (exit code {result.returncode}). "
+              "Re-run after resolving the yazi package-manager error.")
         return False
 
     step("Wiring glow into yazi.toml as the markdown previewer")
