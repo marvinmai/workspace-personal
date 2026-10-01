@@ -93,7 +93,13 @@ def check_repo(repo: Path) -> list[tuple[str, str, str]]:
     res.append((WARN, f"{repo.name} exec bits", f"{len(noexec)} script(s) with shebang but mode 644: {', '.join(noexec[:3])}")
                if noexec else (OK, f"{repo.name} exec bits", "ok"))
     deny = repo / ".denylist"
-    if deny.is_file():
+    own_check = repo / "scripts" / "check-confidentiality.sh"
+    if deny.is_file() and own_check.is_file() and not IS_WINDOWS:
+        # The repo defines its own (scoped) check, e.g. the notes vault exempts its career portfolio.
+        ok = subprocess.run(["sh", str(own_check)], capture_output=True).returncode == 0
+        res.append((OK, f"{repo.name} denylist", "clean (repo's own check)") if ok
+                   else (FAIL, f"{repo.name} denylist", "scripts/check-confidentiality.sh failed"))
+    elif deny.is_file():
         terms = [t for t in deny.read_text(encoding="utf-8").splitlines() if t.strip() and not t.startswith("#")]
         if terms:
             rx = re.compile("|".join(terms), re.I)
