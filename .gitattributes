@@ -1,0 +1,5 @@
+# LF in the repo and in working trees (a CRLF shebang fails as
+# "bad interpreter: /usr/bin/env python3^M"); only batch files need CRLF.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf

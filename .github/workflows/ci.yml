@@ -1,0 +1,22 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python -m unittest discover -s tests
+      - name: Compile installers
+        run: python -m compileall -q bootstrap applications scripts
+      - name: Validate PowerShell scripts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/validate.ps1

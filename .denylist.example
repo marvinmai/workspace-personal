@@ -1,0 +1,5 @@
+# Copy to .denylist (untracked). One extended regex per line, case-insensitive.
+# Employer and customer names, internal domains, old GitHub handles, usernames.
+example-employer
+old-github-handle
+C:\\Users\\

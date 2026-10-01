@@ -1,0 +1,13 @@
+# Machine-specific overrides
+config/*.local.*
+
+# Python bytecode and local caches
+__pycache__/
+*.py[cod]
+
+# WSL export archives if an explicit path is placed in this workspace
+*.tar
+
+# Local denylist of terms that must never be committed (see .denylist.example)
+.denylist
+.claude/settings.local.json
