@@ -1,4 +1,4 @@
-"""Shell helpers (ai-personal, notes, ai, clone) as a managed block.
+"""Shell helpers (ai-personal, notes, ai, clone, slice) as a managed block.
 
 POSIX: written into ~/.bashrc / ~/.zshrc between markers (idempotent).
 Windows: delegated to scripts/setup-shell-extras.ps1, which owns the PowerShell
@@ -30,6 +30,7 @@ def posix_block() -> str:
         'notes() { cd "$(_aiw config get notes_dir)" || return; }',
         'ai() { claude "$@"; }',
         'clone() { _aiw clone "$@"; }',
+        'slice() { _aiw slice "$@"; }',
         END,
     ]) + "\n"
 

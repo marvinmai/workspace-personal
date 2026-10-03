@@ -1,4 +1,4 @@
-"""CLI: python3 -m bootstrap <setup|clone|link|doctor|config> (Windows: py -3 -m bootstrap ...)."""
+"""CLI: python3 -m bootstrap <setup|clone|link|doctor|config|slice> (Windows: py -3 -m bootstrap ...)."""
 from __future__ import annotations
 
 import argparse
@@ -31,6 +31,9 @@ def build_parser() -> argparse.ArgumentParser:
     d = sub.add_parser("doctor", help="report what is installed and what drifted")
     d.add_argument("--json", action="store_true")
 
+    sl = sub.add_parser("slice", help="run the current repo's scripts/slice.<ext>, passing the arguments on")
+    sl.add_argument("args", nargs=argparse.REMAINDER)
+
     g = sub.add_parser("config", help="show or read the local config")
     g.add_argument("action", choices=["show", "path", "get", "init"])
     g.add_argument("key", nargs="?")
@@ -38,6 +41,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    # argparse would claim the launcher's own options (`slice --pick`), so pass them on untouched.
+    if argv[:1] == ["slice"]:
+        from . import slice as slice_cmd
+        return slice_cmd.run(argv[1:])
     args = build_parser().parse_args(argv)
 
     if args.command == "config":

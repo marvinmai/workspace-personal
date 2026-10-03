@@ -20,6 +20,7 @@ Available in any new shell (block in `~/.bashrc`; on Windows the PowerShell prof
 | `notes` | `cd` into the notes vault (`notes_dir` in the config) |
 | `ai [args]` | Runs `claude [args]` |
 | `clone [args]` | Starts the repo picker (see below) |
+| `slice [args]` | Runs the current repo's own launcher `scripts/slice.<ext>` with the arguments; the extension picks the interpreter (`mjs`/`js`/`cjs`: node, `py`: Python, `sh`: bash, `ps1`: PowerShell). What a slice is stays the repo's business |
 
 ## The bootstrap CLI
 

@@ -37,4 +37,9 @@
         Description = "Searches the configured repository sources and clones the selection. Usage: 'clone'."
         Script      = 'install-clone-function.ps1'
     }
+    [pscustomobject]@{
+        Name        = 'slice'
+        Description = "Runs the current repository's scripts/slice.<ext> launcher, passing arguments on. Usage: 'slice [args]'."
+        Script      = 'install-slice-function.ps1'
+    }
 )

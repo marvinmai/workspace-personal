@@ -12,7 +12,11 @@ import contextlib  # noqa: E402
 import importlib.util  # noqa: E402
 import io  # noqa: E402
 
+import subprocess  # noqa: E402
+
 from bootstrap import clone, config, link, picker, shell  # noqa: E402
+from bootstrap import slice as slice_cmd  # noqa: E402
+from bootstrap.__main__ import main as cli_main  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location(
     "install_wezterm",
@@ -220,6 +224,96 @@ class WeztermInstaller(IsolatedHome):
         text = wez.BASE_FILE.read_text(encoding="utf-8")
         self.assertNotIn("default_prog", text)
         self.assertNotIn("default_domain", text)
+
+
+class Slice(unittest.TestCase):
+    """`slice` runs the current repo's scripts/slice.* with the interpreter its extension names."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self._tmp.name).resolve() / "repo"
+        (self.repo / "scripts").mkdir(parents=True)
+        (self.repo / "sub").mkdir()
+        subprocess.run(["git", "init", "-q", str(self.repo)], check=True)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def launcher(self, name, text=""):
+        path = self.repo / "scripts" / name
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_command_per_extension(self):
+        cases = {
+            "slice.mjs": "node", "slice.js": "node", "slice.cjs": "node",
+            "slice.py": sys.executable, "slice.sh": "bash",
+        }
+        for name, interpreter in cases.items():
+            with self.subTest(name=name):
+                path = self.repo / "scripts" / name
+                self.assertEqual(slice_cmd.command(path, ["7"]), [interpreter, str(path), "7"])
+
+    def test_powershell_launcher_runs_as_a_file(self):
+        path = self.repo / "scripts" / "slice.ps1"
+        cmd = slice_cmd.command(path, ["7"])
+        self.assertIn(Path(cmd[0]).stem.lower(), ("pwsh", "powershell"))
+        self.assertEqual(cmd[-3:], ["-File", str(path), "7"])
+
+    def test_finds_the_launcher_from_a_subfolder(self):
+        path = self.launcher("slice.mjs")
+        self.assertEqual(slice_cmd.find_launcher(self.repo / "sub"), path)
+
+    def test_unknown_extensions_are_ignored(self):
+        self.launcher("slice.md")
+        path = self.launcher("slice.py")
+        self.assertEqual(slice_cmd.find_launcher(self.repo), path)
+
+    def test_no_launcher_is_an_error(self):
+        with self.assertRaisesRegex(slice_cmd.SliceError, "no scripts/slice"):
+            slice_cmd.find_launcher(self.repo)
+
+    def test_two_launchers_are_an_error(self):
+        self.launcher("slice.mjs")
+        self.launcher("slice.py")
+        with self.assertRaisesRegex(slice_cmd.SliceError, "slice.mjs.*slice.py"):
+            slice_cmd.find_launcher(self.repo)
+
+    def test_outside_a_git_repo_is_an_error(self):
+        outside = Path(self._tmp.name) / "outside"
+        outside.mkdir()
+        with self.assertRaisesRegex(slice_cmd.SliceError, "not in a git repository"):
+            slice_cmd.find_launcher(outside)
+
+    def test_cli_forwards_arguments_cwd_and_exit_code(self):
+        out = Path(self._tmp.name) / "out.json"
+        self.launcher("slice.py", "import json, os, sys\n"
+                      f"open({str(out)!r}, 'w').write(json.dumps([sys.argv[1:], os.getcwd()]))\n"
+                      "sys.exit(3)\n")
+        cwd = os.getcwd()
+        try:
+            os.chdir(self.repo / "sub")
+            code = cli_main(["slice", "--pick", "7"])
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(code, 3)
+        self.assertEqual(json.loads(out.read_text(encoding="utf-8")),
+                         [["--pick", "7"], str(self.repo / "sub")])
+
+    def test_cli_reports_errors_without_a_traceback(self):
+        cwd = os.getcwd()
+        err = io.StringIO()
+        try:
+            os.chdir(self.repo)
+            with contextlib.redirect_stderr(err):
+                code = cli_main(["slice"])
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(code, 1)
+        self.assertIn("no scripts/slice", err.getvalue())
+
+    def test_posix_block_defines_slice(self):
+        self.assertIn('slice() { _aiw slice "$@"; }', shell.posix_block())
 
 
 class LinkWezterm(IsolatedHome):
