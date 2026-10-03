@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Installs or removes the ai-link, ai-doctor, ai-setup and config commands
+    Installs or removes the ws-link, ws-doctor, ws-setup and ws-config commands
     in a PowerShell profile.
 
 .DESCRIPTION
@@ -55,7 +55,7 @@ function Get-BlockPattern {
 }
 
 # function name -> bootstrap command
-$commands = [ordered]@{ 'ai-link' = 'link'; 'ai-doctor' = 'doctor'; 'ai-setup' = 'setup'; 'config' = 'config' }
+$commands = [ordered]@{ 'ws-link' = 'link'; 'ws-doctor' = 'doctor'; 'ws-setup' = 'setup'; 'ws-config' = 'config' }
 $startMarker = '# >>> workspace-personal: bootstrap command functions >>>'
 $endMarker = '# <<< workspace-personal: bootstrap command functions <<<'
 $managedMarkerPattern = '(?m)^' + [regex]::Escape($startMarker) + '\r?$'
@@ -145,5 +145,5 @@ if ($hasManagedBlock) {
 }
 
 Set-Content -LiteralPath $ProfilePath -Value $updatedProfile -Encoding UTF8
-Write-Info "Installed ai-link, ai-doctor, ai-setup and config in $ProfilePath." Green
+Write-Info "Installed ws-link, ws-doctor, ws-setup and ws-config in $ProfilePath." Green
 Write-Info "Run this in the current session: . `"$ProfilePath`"" Cyan

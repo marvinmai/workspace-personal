@@ -21,11 +21,11 @@ Available in any new shell (block in `~/.bashrc`; on Windows the PowerShell prof
 | `ai [args]` | Runs `claude [args]` |
 | `clone [args]` | Starts the repo picker (see below) |
 | `slice [args]` | Runs the current repo's own launcher `scripts/slice.<ext>` with the arguments; the extension picks the interpreter (`mjs`/`js`/`cjs`: node, `py`: Python, `sh`: bash, `ps1`: PowerShell). What a slice is stays the repo's business |
-| `ai-link`, `ai-doctor`, `ai-setup`, `config` | Run the bootstrap command of the same name from any directory, with the arguments (`ai-link --dry-run`, `config get notes_dir`) |
+| `ws-link`, `ws-doctor`, `ws-setup`, `ws-config` | Run the bootstrap command of the same name from any directory, with the arguments (`ws-link --dry-run`, `ws-config get notes_dir`) |
 
 ## The bootstrap CLI
 
-From any directory, `ai-link`, `ai-doctor`, `ai-setup` and `config` run the commands below
+From any directory, `ws-link`, `ws-doctor`, `ws-setup` and `ws-config` run the commands below
 (installed by `link`, so the very first run uses the long form). The long form runs from
 `~/dev/workspace-personal`. Linux: `python3 -m bootstrap <command>` or `bash setup.sh` / `bash clone.sh`.
 Windows: `py -3 -m bootstrap <command>` or `.\setup.bat` / `.\clone.bat`.
@@ -120,7 +120,7 @@ mutes it), and a guard that forces a permission prompt for every `git push`, inc
 ## Changing ai-personal
 
 - Live edit while developing: `claude --plugin-dir ~/dev/ai-personal`.
-- The installed plugin is a cached copy. After editing, run `ai-link` (or
+- The installed plugin is a cached copy. After editing, run `ws-link` (or
   `claude plugin update personal@ai-personal`), then `/reload-plugins` in an open session.
 - Rule changes: run `link` to redeploy to `~/.claude/rules/`.
 - Never put `.mcp.json` or `settings.json` in the repo root; they would become live plugin components.
