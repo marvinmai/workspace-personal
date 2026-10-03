@@ -110,6 +110,13 @@ class ShellBlock(unittest.TestCase):
         self.assertIn("# after", new)
         self.assertNotIn("\nold\n", new)
 
+    def test_posix_block_defines_short_bootstrap_commands(self):
+        block = shell.posix_block()
+        for command in ("link", "doctor", "setup"):
+            self.assertIn(f'ai-{command}() {{ _aiw {command} "$@"; }}', block)
+        self.assertIn('config() { _aiw config "$@"; }', block)
+        self.assertNotIn("ai-config", block)
+
     def test_malformed_block_raises(self):
         with self.assertRaises(ValueError):
             shell.replace_block(shell.BEGIN + "\nno end", shell.posix_block())

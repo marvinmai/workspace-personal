@@ -42,4 +42,9 @@
         Description = "Runs the current repository's scripts/slice.<ext> launcher, passing arguments on. Usage: 'slice [args]'."
         Script      = 'install-slice-function.ps1'
     }
+    [pscustomobject]@{
+        Name        = 'ai-link, ai-doctor, ai-setup, config'
+        Description = "Run the bootstrap commands from any directory, passing arguments on. Usage: 'ai-link --dry-run'."
+        Script      = 'install-ai-commands-function.ps1'
+    }
 )

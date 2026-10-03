@@ -19,7 +19,7 @@ private PC, October 2026) taught.
 
 1. Install Git and Python (Windows: `winget install Python.Python.3.12 Git.Git`).
 2. Clone `workspace-personal` and run `setup.sh` / `setup.bat`.
-3. `python3 -m bootstrap doctor` (Windows: `py -3 -m bootstrap doctor`) until nothing is red.
+3. `ai-doctor` (or `python3 -m bootstrap doctor`, Windows: `py -3 -m bootstrap doctor`) until nothing is red.
 4. Windows only: `winget install Microsoft.PowerShell`, then the PowerShell profile
    helpers install through `link`. Check that hooks work: the plugin's hooks call
    `python3`; if that name is missing on Windows, switch the commands in
