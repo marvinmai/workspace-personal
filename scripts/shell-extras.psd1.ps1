@@ -43,8 +43,8 @@
         Script      = 'install-slice-function.ps1'
     }
     [pscustomobject]@{
-        Name        = 'ws-link, ws-doctor, ws-setup, ws-config'
-        Description = "Run the bootstrap commands from any directory, passing arguments on. Usage: 'ws-link --dry-run'."
+        Name        = 'ws-link, ws-doctor, ws-setup, ws-config, ws-help'
+        Description = "Run the bootstrap commands from any directory, passing arguments on. Usage: 'ws-link --dry-run', 'ws-help' for an overview."
         Script      = 'install-ws-commands-function.ps1'
     }
 )

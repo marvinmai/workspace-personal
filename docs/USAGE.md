@@ -22,6 +22,7 @@ Available in any new shell (block in `~/.bashrc`; on Windows the PowerShell prof
 | `clone [args]` | Starts the repo picker (see below) |
 | `slice [args]` | Runs the current repo's own launcher `scripts/slice.<ext>` with the arguments; the extension picks the interpreter (`mjs`/`js`/`cjs`: node, `py`: Python, `sh`: bash, `ps1`: PowerShell). What a slice is stays the repo's business |
 | `ws-link`, `ws-doctor`, `ws-setup`, `ws-config` | Run the bootstrap command of the same name from any directory, with the arguments (`ws-link --dry-run`, `ws-config get notes_dir`) |
+| `ws-help` | Prints an overview of these commands and how to use them |
 
 ## The bootstrap CLI
 

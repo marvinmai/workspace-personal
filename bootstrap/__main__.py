@@ -1,4 +1,4 @@
-"""CLI: python3 -m bootstrap <setup|clone|link|doctor|config|slice> (Windows: py -3 -m bootstrap ...)."""
+"""CLI: python3 -m bootstrap <setup|clone|link|doctor|config|slice|help> (Windows: py -3 -m bootstrap ...)."""
 from __future__ import annotations
 
 import argparse
@@ -34,6 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
     sl = sub.add_parser("slice", help="run the current repo's scripts/slice.<ext>, passing the arguments on")
     sl.add_argument("args", nargs=argparse.REMAINDER)
 
+    sub.add_parser("help", help="overview of the workspace shell commands")
+
     g = sub.add_parser("config", help="show or read the local config")
     g.add_argument("action", choices=["show", "path", "get", "init"])
     g.add_argument("key", nargs="?")
@@ -68,6 +70,10 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
         return 0
 
+    if args.command == "help":
+        from . import shell
+        print(shell.help_text())
+        return 0
     if args.command == "clone":
         from . import clone
         return clone.run(args)
