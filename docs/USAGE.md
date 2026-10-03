@@ -76,9 +76,9 @@ on first run, never committed. Edit it by hand:
 
 ```json
 {
-  "repos_dir": "/home/marvin/dev",
-  "ai_personal_dir": "/home/marvin/dev/ai-personal",
-  "notes_dir": "/home/marvin/dev/ai-projects",
+  "repos_dir": "/home/me/dev",
+  "ai_personal_dir": "/home/me/dev/ai-personal",
+  "notes_dir": "/home/me/dev/ai-projects",
   "sources": [{ "type": "github", "owner": "marvinmai" }],
   "wezterm_shell": "login"
 }
@@ -142,8 +142,3 @@ With `pwsh` installed: `pwsh -NoProfile -File scripts/validate.ps1` and
 
 Ask Claude to use the `porting-environments` skill, or read `docs/PORTING.md`. Short version:
 install Git and Python, clone `workspace-personal`, run `setup`, then `doctor` until nothing is red.
-
-## Backups
-
-`~/backup-dev-2026-10-01/` holds git bundles and a tarball of the pre-cleanup repos. They contain employer
-data: delete them once you are sure you do not need the old history.
