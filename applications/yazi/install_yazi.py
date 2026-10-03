@@ -13,6 +13,8 @@ Installs Yazi and configures it, on Windows, Linux, and macOS:
   - installs glow + the piper plugin and wires them up as the markdown previewer
     (on Windows: also makes sure `sh.exe` from Git for Windows is on PATH, since
     piper hard-codes `sh -c ...` with no way to point it at a different shell)
+  - makes Enter on a markdown file open it rendered in glow's pager (the editor
+    stays available via "O")
 
 Safe to re-run: every step only adds what is missing, never overwrites an existing
 valid YAZI_FILE_ONE, keymap binding, shell function, or previewer - it asks or skips.
@@ -866,6 +868,34 @@ PIPER_MD_PREVIEWER = (
     'run = \'piper -- CLICOLOR_FORCE=1 glow -w=$w -s=dark "$1"\''
 )
 
+# Enter renders markdown in glow's pager; "O" still offers the editor.
+GLOW_MD_OPENER = (
+    # An array-of-tables header stays valid TOML even if the user already has
+    # an [opener] table elsewhere in the file.
+    '[[opener.markdown]]\n'
+    'run = "glow -p -s=dark %s1"\n'
+    'block = true\n'
+    'desc = "Render (glow)"\n'
+    '\n'
+    '[[open.prepend_rules]]\n'
+    'url = "*.md"\n'
+    'use = ["markdown", "edit", "reveal"]'
+)
+MARKDOWN_OPENER_CONFLICT_PATTERN = (
+    r'^\s*markdown\s*=|^\s*\[\[?\s*opener\.markdown'
+    r'|^\s*\[\[open\.prepend_rules\]\]\s*\n\s*url\s*=\s*"\*\.md"'
+)
+
+
+def configure_markdown_opener(yazi_toml):
+    upsert_marker_block(
+        yazi_toml,
+        "markdown-open",
+        GLOW_MD_OPENER,
+        conflict_pattern=MARKDOWN_OPENER_CONFLICT_PATTERN,
+        conflict_label="A manual markdown opener",
+    )
+
 
 def upsert_marker_block(path, name, block, conflict_pattern=None, conflict_label=None):
     """Create or update a managed TOML block without touching other settings."""
@@ -1058,6 +1088,9 @@ def configure_markdown_preview(config_dir=None):
         conflict_pattern=r'url\s*=\s*"\*\.md"',
         conflict_label="A manual '*.md' previewer",
     )
+
+    step("Making yazi open markdown files rendered in glow")
+    configure_markdown_opener(yazi_toml)
     return True
 
 
@@ -1086,7 +1119,8 @@ def main():
     parser.add_argument("--skip-shell-wrapper", action="store_true",
                          help="Don't install the 'y' cd-on-exit shell function.")
     parser.add_argument("--skip-markdown-preview", action="store_true",
-                         help="Don't install glow / the piper markdown previewer.")
+                         help="Don't install glow / the piper markdown previewer "
+                              "and glow markdown opener.")
     args = parser.parse_args()
 
     wrapper_paths = None

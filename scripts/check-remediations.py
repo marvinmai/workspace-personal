@@ -1189,6 +1189,50 @@ def check_yazi_conflict_forms():
         raise AssertionError("unrelated POSIX function was treated as y")
 
 
+def check_yazi_markdown_opener():
+    module = load_module(
+        "workspace_personal_yazi_markdown_opener",
+        WORKSPACE_ROOT / "applications" / "yazi" / "install_yazi.py",
+    )
+    yazi_toml = SCRATCH_ROOT / "yazi-markdown-opener.toml"
+    prefix = (
+        "# >>> yazi-setup: markdown-preview >>>\n"
+        "[[plugin.prepend_previewers]]\n"
+        'url = "*.md"\n'
+        "# <<< yazi-setup: markdown-preview <<<\n"
+    )
+    yazi_toml.write_text(prefix, encoding="utf-8")
+    with contextlib.redirect_stdout(io.StringIO()):
+        module.configure_markdown_opener(yazi_toml)
+    first = yazi_toml.read_text(encoding="utf-8")
+    if not first.startswith(prefix):
+        raise AssertionError("Yazi markdown opener rewrote content outside its block")
+    for expected in (
+        "# >>> yazi-setup: markdown-open >>>",
+        "glow -p -s=dark %s1",
+        "block = true",
+        '[[open.prepend_rules]]',
+        'use = ["markdown", "edit", "reveal"]',
+    ):
+        if expected not in first:
+            raise AssertionError(f"Yazi markdown opener is missing: {expected}")
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        module.configure_markdown_opener(yazi_toml)
+    if yazi_toml.read_text(encoding="utf-8") != first:
+        raise AssertionError("Yazi markdown opener is not idempotent")
+
+    manual = (
+        "[opener]\n"
+        'markdown = [{ run = "mdcat %s1", block = true }]\n'
+    )
+    yazi_toml.write_text(manual, encoding="utf-8")
+    with contextlib.redirect_stdout(io.StringIO()):
+        module.configure_markdown_opener(yazi_toml)
+    if yazi_toml.read_text(encoding="utf-8") != manual:
+        raise AssertionError("Yazi markdown opener overwrote a manual opener")
+
+
 def check_yazi_environment_broadcast():
     module = load_module(
         "workspace_personal_yazi_environment_broadcast",
@@ -2498,6 +2542,7 @@ def main():
         check_yazi_atomic_marker_preflight()
         check_yazi_environment_broadcast()
         check_yazi_toml_escaping()
+        check_yazi_markdown_opener()
         check_line_ending_preservation()
         check_managed_marker_validation()
         check_existing_executable_discovery()
