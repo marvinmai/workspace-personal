@@ -1,4 +1,4 @@
-"""Shell helpers (ai-personal, notes, ai, clone, slice, config, ai-<command>) as a managed block.
+"""Shell helpers (ai-personal, notes, ai, clone, slice, ws-<command>) as a managed block.
 
 POSIX: written into ~/.bashrc / ~/.zshrc between markers (idempotent).
 Windows: delegated to scripts/setup-shell-extras.ps1, which owns the PowerShell
@@ -18,8 +18,21 @@ from .config import WORKSPACE_ROOT
 BEGIN = "# >>> ai-workspace >>>"
 END = "# <<< ai-workspace <<<"
 IS_WINDOWS = sys.platform.startswith("win")
-# bootstrap subcommands that get an `ai-<command>` shortcut
-SHORT_COMMANDS = ("link", "doctor", "setup")
+# bootstrap subcommands that get a `ws-<command>` shortcut
+SHORT_COMMANDS = ("link", "doctor", "setup", "config", "help")
+# (usage, description) for `ws-help`; one line per shell helper
+HELP = (
+    ("ai-personal", "cd into the ai-personal repo (config: ai_personal_dir)"),
+    ("notes", "cd into the notes vault (config: notes_dir)"),
+    ("ai [args]", "run Claude Code (claude [args])"),
+    ("clone [options]", "pick and clone repositories from the configured sources"),
+    ("slice [args]", "run the current repo's scripts/slice.<ext>, passing the arguments on"),
+        ("ws-setup [options]", "config, clone, link and optional application installers"),
+    ("ws-link [--dry-run]", "install plugin, rules, settings fragment and shell helpers"),
+    ("ws-doctor [--json]", "report what is installed and what drifted"),
+    ("ws-config show|path|get <key>|init", "show or read the local config"),
+    ("ws-help", "show this overview"),
+)
 
 
 def posix_block() -> str:
@@ -33,10 +46,17 @@ def posix_block() -> str:
         'ai() { claude "$@"; }',
         'clone() { _aiw clone "$@"; }',
         'slice() { _aiw slice "$@"; }',
-        'config() { _aiw config "$@"; }',
-        *(f'ai-{c}() {{ _aiw {c} "$@"; }}' for c in SHORT_COMMANDS),
+        *(f'ws-{c}() {{ _aiw {c} "$@"; }}' for c in SHORT_COMMANDS),
         END,
     ]) + "\n"
+
+
+def help_text() -> str:
+    width = max(len(usage) for usage, _ in HELP)
+    lines = ["Workspace commands (any directory):"]
+    lines += [f"  {usage:<{width}}  {text}" for usage, text in HELP]
+    lines += ["", "Options of a command: <command> --help (e.g. ws-setup --help, clone --help)."]
+    return "\n".join(lines)
 
 
 def replace_block(text: str, block: str) -> str:

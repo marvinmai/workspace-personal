@@ -1,6 +1,7 @@
 """Unit tests for the bootstrap core. Run: python3 -m unittest discover -s tests"""
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -112,10 +113,20 @@ class ShellBlock(unittest.TestCase):
 
     def test_posix_block_defines_short_bootstrap_commands(self):
         block = shell.posix_block()
-        for command in ("link", "doctor", "setup"):
-            self.assertIn(f'ai-{command}() {{ _aiw {command} "$@"; }}', block)
-        self.assertIn('config() { _aiw config "$@"; }', block)
-        self.assertNotIn("ai-config", block)
+        for command in ("link", "doctor", "setup", "help", "config"):
+            self.assertIn(f'ws-{command}() {{ _aiw {command} "$@"; }}', block)
+        self.assertNotIn("ai-link", block)
+        self.assertNotRegex(block, r"(?m)^config\(\)")
+
+    def test_help_lists_every_shell_command(self):
+        functions = re.findall(r"^([\w-]+)\(\)", shell.posix_block(), re.MULTILINE)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = cli_main(["help"])
+        self.assertEqual(code, 0)
+        for name in functions:
+            if name != "_aiw":
+                self.assertRegex(out.getvalue(), rf"(?m)^  {re.escape(name)}\b")
 
     def test_malformed_block_raises(self):
         with self.assertRaises(ValueError):

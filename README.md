@@ -35,8 +35,9 @@ no PowerShell is needed on Linux. Commands:
 | `config show|path|get <key>|init` | inspect the local config |
 
 Shell helpers: `ai-personal` and `notes` change into the configured folders,
-`ai` runs Claude Code, `clone` starts the picker, and `ai-link`, `ai-doctor`,
-`ai-setup` and `config` run those commands from any directory. On Linux they are a managed
+`ai` runs Claude Code, `clone` starts the picker, `ws-link`, `ws-doctor`,
+`ws-setup` and `ws-config` run those commands from any directory, and `ws-help`
+lists them all. On Linux they are a managed
 block in `~/.bashrc`/`~/.zshrc`; on Windows the `scripts\install-*.ps1`
 installers write the PowerShell profile.
 
