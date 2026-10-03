@@ -1283,6 +1283,36 @@ def check_yazi_icon_font():
             raise AssertionError("Yazi icon font reported success after a failed download")
 
 
+def check_yazi_piper_pin_keeps_hash():
+    module = load_module(
+        "workspace_personal_yazi_piper_pin",
+        WORKSPACE_ROOT / "applications" / "yazi" / "install_yazi.py",
+    )
+    package_toml = SCRATCH_ROOT / "yazi-piper-package.toml"
+    pinned = (
+        "[[plugin.deps]]\n"
+        'use = "yazi-rs/plugins:piper"\n'
+        f'rev = "{module.PIPER_REV}"\n'
+        'hash = "12126fca34f9f1802bb57b88292f57af"\n'
+        "\n"
+        "[flavor]\n"
+        "deps = []\n"
+    )
+    package_toml.write_text(pinned, encoding="utf-8")
+    with contextlib.redirect_stdout(io.StringIO()):
+        changed = module.pin_piper_plugin(package_toml)
+    if changed or package_toml.read_text(encoding="utf-8") != pinned:
+        raise AssertionError("Piper pin rewrote an entry already pinned to PIPER_REV")
+
+    stale = pinned.replace(module.PIPER_REV, "0000000")
+    package_toml.write_text(stale, encoding="utf-8")
+    with contextlib.redirect_stdout(io.StringIO()):
+        changed = module.pin_piper_plugin(package_toml)
+    repinned = package_toml.read_text(encoding="utf-8")
+    if not changed or f'rev = "{module.PIPER_REV}"' not in repinned or "hash" in repinned:
+        raise AssertionError("Piper pin did not replace a stale rev and its hash")
+
+
 def check_yazi_environment_broadcast():
     module = load_module(
         "workspace_personal_yazi_environment_broadcast",
@@ -2594,6 +2624,7 @@ def main():
         check_yazi_toml_escaping()
         check_yazi_markdown_opener()
         check_yazi_icon_font()
+        check_yazi_piper_pin_keeps_hash()
         check_line_ending_preservation()
         check_managed_marker_validation()
         check_existing_executable_discovery()

@@ -1007,7 +1007,11 @@ def pin_piper_plugin(package_toml):
         'use = "yazi-rs/plugins:piper"',
         f'rev = "{PIPER_REV}"',
     )) + newline
-    if PIPER_DEP_RE.search(content):
+    match = PIPER_DEP_RE.search(content)
+    if match and re.search(rf'^rev\s*=\s*"{PIPER_REV}"\s*$', match.group(0), re.M):
+        # Already pinned: keep the hash `ya pkg install` recorded for this rev.
+        return False
+    if match:
         updated = PIPER_DEP_RE.sub(lambda _m: entry + newline, content, count=1)
     else:
         updated = entry + newline + content
