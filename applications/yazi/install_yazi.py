@@ -15,6 +15,8 @@ Installs Yazi and configures it, on Windows, Linux, and macOS:
     piper hard-codes `sh -c ...` with no way to point it at a different shell)
   - makes Enter on a markdown file open it rendered in glow's pager (the editor
     stays available via "O")
+  - installs the Nerd Font symbols (per user) so the terminal can draw yazi's file
+    icons instead of "missing glyph" placeholders
 
 Safe to re-run: every step only adds what is missing, never overwrites an existing
 valid YAZI_FILE_ONE, keymap binding, shell function, or previewer - it asks or skips.
@@ -30,6 +32,9 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import urllib.request
+import zipfile
 from pathlib import Path
 
 IS_WINDOWS = platform.system() == "Windows"
@@ -1096,6 +1101,78 @@ def configure_markdown_preview(config_dir=None):
 
 # --- main -------------------------------------------------------------------
 
+# yazi's built-in icons come from current Nerd Fonts releases (e.g. U+E6B8 for
+# .css); terminals bundling older symbols (WezTerm 20240203) show placeholders.
+# The terminal's font fallback picks the font up once it is installed.
+NERD_SYMBOLS_URL = (
+    "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/"
+    "NerdFontsSymbolsOnly.zip"
+)
+NERD_SYMBOLS_FONT = "SymbolsNerdFontMono-Regular.ttf"
+NERD_SYMBOLS_REGISTRY_NAME = "Symbols Nerd Font Mono Regular (TrueType)"
+ICON_PROBE_CODEPOINT = "e6b8"
+
+
+def user_font_dir():
+    if IS_WINDOWS:
+        return Path(os.environ["LOCALAPPDATA"]) / "Microsoft" / "Windows" / "Fonts"
+    if IS_MAC:
+        return Path.home() / "Library" / "Fonts"
+    return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "fonts"
+
+
+def icon_font_installed():
+    if shutil.which("fc-list"):
+        result = subprocess.run(
+            ["fc-list", f":charset={ICON_PROBE_CODEPOINT}", "family"],
+            capture_output=True, text=True)
+        return result.returncode == 0 and bool(result.stdout.strip())
+    return (user_font_dir() / NERD_SYMBOLS_FONT).exists()
+
+
+def download_nerd_symbols(dest):
+    with urllib.request.urlopen(NERD_SYMBOLS_URL, timeout=60) as response, \
+            open(dest, "wb") as out:
+        shutil.copyfileobj(response, out)
+
+
+def refresh_font_cache(font_dir):
+    if IS_WINDOWS:
+        import winreg
+        with winreg.CreateKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows NT\CurrentVersion\Fonts") as key:
+            winreg.SetValueEx(key, NERD_SYMBOLS_REGISTRY_NAME, 0, winreg.REG_SZ,
+                              str(font_dir / NERD_SYMBOLS_FONT))
+    elif shutil.which("fc-cache"):
+        run(["fc-cache", "-f", str(font_dir)])
+
+
+def configure_icon_font(font_dir=None, download=download_nerd_symbols):
+    step("Installing the Nerd Font symbols for yazi's icons")
+    if icon_font_installed():
+        print("A font with yazi's icon glyphs is already installed.")
+        return True
+
+    font_dir = Path(font_dir) if font_dir else user_font_dir()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "NerdFontsSymbolsOnly.zip"
+            download(archive)
+            with zipfile.ZipFile(archive) as zf:
+                data = zf.read(NERD_SYMBOLS_FONT)
+    except (OSError, KeyError, zipfile.BadZipFile) as exc:
+        print(f"Could not download the Nerd Font symbols: {exc}")
+        print(f"Install {NERD_SYMBOLS_FONT} from {NERD_SYMBOLS_URL} manually.")
+        return False
+
+    font_dir.mkdir(parents=True, exist_ok=True)
+    (font_dir / NERD_SYMBOLS_FONT).write_bytes(data)
+    refresh_font_cache(font_dir)
+    print(f"Installed {NERD_SYMBOLS_FONT} to {font_dir}. Restart the terminal to use it.")
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     default_target = (
@@ -1121,6 +1198,8 @@ def main():
     parser.add_argument("--skip-markdown-preview", action="store_true",
                          help="Don't install glow / the piper markdown previewer "
                               "and glow markdown opener.")
+    parser.add_argument("--skip-icon-font", action="store_true",
+                         help="Don't install the Nerd Font symbols for yazi's icons.")
     args = parser.parse_args()
 
     wrapper_paths = None
@@ -1163,6 +1242,9 @@ def main():
     if not args.skip_markdown_preview:
         if not configure_markdown_preview(args.config_dir):
             return 1
+
+    if not args.skip_icon_font:
+        configure_icon_font()
 
     step("Done. Restart your terminal (and yazi) for changes to take effect.")
     return 0

@@ -27,6 +27,7 @@ import stat
 import subprocess
 import sys
 from types import SimpleNamespace
+import zipfile
 
 
 sys.dont_write_bytecode = True
@@ -1231,6 +1232,55 @@ def check_yazi_markdown_opener():
         module.configure_markdown_opener(yazi_toml)
     if yazi_toml.read_text(encoding="utf-8") != manual:
         raise AssertionError("Yazi markdown opener overwrote a manual opener")
+
+
+def check_yazi_icon_font():
+    module = load_module(
+        "workspace_personal_yazi_icon_font",
+        WORKSPACE_ROOT / "applications" / "yazi" / "install_yazi.py",
+    )
+    archive = SCRATCH_ROOT / "NerdFontsSymbolsOnly.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("LICENSE", "license")
+        zf.writestr("README.md", "readme")
+        zf.writestr("SymbolsNerdFont-Regular.ttf", b"proportional")
+        zf.writestr("SymbolsNerdFontMono-Regular.ttf", b"mono")
+    font_dir = SCRATCH_ROOT / "fonts"
+    downloads = []
+    refreshed = []
+
+    def download(dest):
+        downloads.append(dest)
+        shutil.copyfile(archive, dest)
+
+    module.icon_font_installed = lambda: False
+    module.refresh_font_cache = refreshed.append
+    with contextlib.redirect_stdout(io.StringIO()):
+        if not module.configure_icon_font(font_dir, download=download):
+            raise AssertionError("Yazi icon font install reported failure")
+    if sorted(p.name for p in font_dir.iterdir()) != ["SymbolsNerdFontMono-Regular.ttf"]:
+        raise AssertionError("Yazi icon font install did not extract only the mono font")
+    if (font_dir / "SymbolsNerdFontMono-Regular.ttf").read_bytes() != b"mono":
+        raise AssertionError("Yazi icon font install wrote the wrong font file")
+    if len(downloads) != 1 or refreshed != [font_dir]:
+        raise AssertionError("Yazi icon font install did not download once and refresh")
+
+    module.icon_font_installed = lambda: True
+    with contextlib.redirect_stdout(io.StringIO()):
+        if not module.configure_icon_font(font_dir, download=download):
+            raise AssertionError("Yazi icon font skip reported failure")
+    if len(downloads) != 1:
+        raise AssertionError("Yazi icon font downloaded although the glyphs exist")
+
+    module.icon_font_installed = lambda: False
+
+    def failing_download(dest):
+        raise OSError("offline")
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        if module.configure_icon_font(SCRATCH_ROOT / "fonts-offline",
+                                      download=failing_download):
+            raise AssertionError("Yazi icon font reported success after a failed download")
 
 
 def check_yazi_environment_broadcast():
@@ -2543,6 +2593,7 @@ def main():
         check_yazi_environment_broadcast()
         check_yazi_toml_escaping()
         check_yazi_markdown_opener()
+        check_yazi_icon_font()
         check_line_ending_preservation()
         check_managed_marker_validation()
         check_existing_executable_discovery()
