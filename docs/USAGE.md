@@ -66,7 +66,7 @@ installed and logged in, private repos are listed; without it, only public ones.
 python3 -m bootstrap setup [--skip-clone] [--skip-link] [--install-applications] [--non-interactive]
 ```
 Creates the config, optionally runs the picker, runs `link`, and optionally the application installers
-(`applications/*`; on Linux only Yazi, on Windows PowerShell/WezTerm/WSL/Yazi). `--non-interactive` with
+(`applications/*`; on Linux Yazi and Helix (via Homebrew), on Windows PowerShell/WezTerm/WSL/Yazi). `--non-interactive` with
 `--install-applications` is rejected because those installers prompt.
 
 ### `config`: inspect the local config

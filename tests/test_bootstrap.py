@@ -25,6 +25,18 @@ _spec = importlib.util.spec_from_file_location(
 wez = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(wez)
 
+
+def _load_installer(app):
+    path = Path(__file__).resolve().parent.parent / "applications" / app / f"install_{app}.py"
+    spec = importlib.util.spec_from_file_location(f"install_{app}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+helix_installer = _load_installer("helix")
+brew_common = sys.modules["brew_common"]
+
 REPOS = [{"name": n} for n in ("alpha-api", "beta-api", "alpha-ui", "gamma")]
 
 
@@ -350,6 +362,52 @@ class LinkWezterm(IsolatedHome):
             self.assertIsNone(link.wezterm_command({}))
         finally:
             link.shutil.which, link.sys.platform = orig_which, orig_platform
+
+
+class Brew(unittest.TestCase):
+    def test_shellenv_line_uses_the_brew_path(self):
+        self.assertEqual(brew_common.shellenv_line("/opt/brew/bin/brew"),
+                         'eval "$(/opt/brew/bin/brew shellenv)"')
+
+    def test_shellenv_is_appended_once(self):
+        line = 'eval "$(/b/brew shellenv)"'
+        text = brew_common.add_shellenv("alias ll='ls -l'\n", line)
+        self.assertEqual(text, f"alias ll='ls -l'\n\n{line}\n")
+        self.assertIsNone(brew_common.add_shellenv(text, line))
+
+    def test_existing_shellenv_in_any_form_is_kept(self):
+        rc = 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)"\n'
+        self.assertIsNone(brew_common.add_shellenv(rc, 'eval "$(/x/brew shellenv)"'))
+
+    def test_commented_shellenv_does_not_count(self):
+        rc = '# eval "$(/b/brew shellenv)"\n'
+        self.assertIsNotNone(brew_common.add_shellenv(rc, 'eval "$(/b/brew shellenv)"'))
+
+    def test_missing_keeps_the_wanted_order(self):
+        self.assertEqual(brew_common.missing({"b", "x"}, ["a", "b", "c"]), ["a", "c"])
+
+
+class HelixInstaller(unittest.TestCase):
+    def test_installs_helix_and_a_server_per_language(self):
+        formulae = helix_installer.formulae()
+        self.assertEqual(formulae[0], "helix")
+        for server in ("typescript-language-server", "ty", "ruff", "jdtls",
+                       "bash-language-server", "marksman", "yaml-language-server",
+                       "vscode-langservers-extracted"):
+            self.assertIn(server, formulae)
+        self.assertEqual(len(formulae), len(set(formulae)))
+
+
+class SetupInstallers(unittest.TestCase):
+    def test_linux_runs_yazi_and_helix(self):
+        from bootstrap import setup
+        orig = setup.IS_WINDOWS
+        try:
+            setup.IS_WINDOWS = False
+            names = [Path(p).name for p in setup._installers()]
+        finally:
+            setup.IS_WINDOWS = orig
+        self.assertEqual(names, ["install_yazi.py", "install_helix.py"])
 
 
 if __name__ == "__main__":
