@@ -25,6 +25,19 @@ _spec = importlib.util.spec_from_file_location(
 wez = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(wez)
 
+
+def _load_installer(app):
+    path = Path(__file__).resolve().parent.parent / "applications" / app / f"install_{app}.py"
+    spec = importlib.util.spec_from_file_location(f"install_{app}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+lazygit_installer = _load_installer("lazygit")
+helix_installer = _load_installer("helix")
+brew_common = sys.modules["brew_common"]
+
 REPOS = [{"name": n} for n in ("alpha-api", "beta-api", "alpha-ui", "gamma")]
 
 
@@ -350,6 +363,114 @@ class LinkWezterm(IsolatedHome):
             self.assertIsNone(link.wezterm_command({}))
         finally:
             link.shutil.which, link.sys.platform = orig_which, orig_platform
+
+
+class Brew(IsolatedHome):
+    def test_shellenv_line_uses_the_brew_path(self):
+        self.assertEqual(brew_common.shellenv_line("/opt/brew/bin/brew"),
+                         'eval "$(/opt/brew/bin/brew shellenv)"')
+
+    def test_shellenv_is_appended_once(self):
+        line = 'eval "$(/b/brew shellenv)"'
+        text = brew_common.add_shellenv("alias ll='ls -l'\n", line)
+        self.assertEqual(text, f"alias ll='ls -l'\n\n{line}\n")
+        self.assertIsNone(brew_common.add_shellenv(text, line))
+
+    def test_existing_shellenv_in_any_form_is_kept(self):
+        rc = 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)"\n'
+        self.assertIsNone(brew_common.add_shellenv(rc, 'eval "$(/x/brew shellenv)"'))
+
+    def test_commented_shellenv_does_not_count(self):
+        rc = '# eval "$(/b/brew shellenv)"\n'
+        self.assertIsNotNone(brew_common.add_shellenv(rc, 'eval "$(/b/brew shellenv)"'))
+
+    def test_config_action(self):
+        target = self.home / "config.yml"
+        self.assertEqual(brew_common.config_action(target, "a: 1\n"), "write")
+        target.write_text("", encoding="utf-8")
+        self.assertEqual(brew_common.config_action(target, "a: 1\n"), "write")
+        target.write_text("a: 1\n", encoding="utf-8")
+        self.assertEqual(brew_common.config_action(target, "a: 1\n"), "unchanged")
+        target.write_text("b: 2\n", encoding="utf-8")
+        self.assertEqual(brew_common.config_action(target, "a: 1\n"), "differs")
+
+    def test_missing_keeps_the_wanted_order(self):
+        self.assertEqual(brew_common.missing({"b", "x"}, ["a", "b", "c"]), ["a", "c"])
+
+
+class LazygitInstaller(IsolatedHome):
+    def test_installs_lazygit_and_delta(self):
+        self.assertEqual(lazygit_installer.FORMULAE, ["lazygit", "git-delta"])
+
+    def test_config_path_follows_xdg(self):
+        self.assertEqual(lazygit_installer.config_path(),
+                         self.home / ".config" / "lazygit" / "config.yml")
+
+    def test_lg_block_defines_the_shortcut(self):
+        block = lazygit_installer.shortcut_block()
+        self.assertIn('lg() { lazygit "$@"; }', block)
+        self.assertTrue(block.startswith(lazygit_installer.SHORTCUT_BEGIN))
+        self.assertTrue(block.rstrip("\n").endswith(lazygit_installer.SHORTCUT_END))
+
+    def test_lg_block_is_added_once_and_keeps_user_text(self):
+        block = lazygit_installer.shortcut_block()
+        text = lazygit_installer.upsert_shortcut("alias ll='ls -l'\n")
+        self.assertEqual(text, f"alias ll='ls -l'\n\n{block}")
+        self.assertEqual(lazygit_installer.upsert_shortcut(text), text)
+
+    def test_lg_block_is_replaced_in_place(self):
+        old = (f"a\n{lazygit_installer.SHORTCUT_BEGIN}\nlg() {{ old; }}\n"
+               f"{lazygit_installer.SHORTCUT_END}\nb\n")
+        new = lazygit_installer.upsert_shortcut(old)
+        self.assertEqual(new, f"a\n{lazygit_installer.shortcut_block()}b\n")
+
+    def test_lg_block_without_end_marker_raises(self):
+        with self.assertRaises(ValueError):
+            lazygit_installer.upsert_shortcut(f"{lazygit_installer.SHORTCUT_BEGIN}\nlg\n")
+
+    def test_shipped_config_uses_hx_and_delta(self):
+        text = lazygit_installer.CONFIG_SOURCE.read_text(encoding="utf-8")
+        self.assertIn("editPreset: helix (hx)", text)
+        self.assertIn("diffRenderers:", text)
+        self.assertIn("delta ", text)
+
+
+class HelixInstaller(IsolatedHome):
+    def test_languages_path_follows_xdg(self):
+        self.assertEqual(helix_installer.languages_path(),
+                         self.home / ".config" / "helix" / "languages.toml")
+
+    @unittest.skipIf(sys.version_info < (3, 11), "tomllib needs Python 3.11")
+    def test_typescript_7_server_comes_first_with_the_classic_fallback(self):
+        import tomllib
+        config = tomllib.loads(helix_installer.LANGUAGES_SOURCE.read_text(encoding="utf-8"))
+        server = config["language-server"]["tsc-lsp"]
+        self.assertEqual([server["command"], *server["args"]],
+                         ["npx", "--no-install", "tsc", "--lsp", "--stdio"])
+        languages = {lang["name"]: lang["language-servers"] for lang in config["language"]}
+        for name in ("typescript", "javascript", "tsx", "jsx"):
+            self.assertEqual(languages[name], ["tsc-lsp", "typescript-language-server"])
+
+    def test_installs_helix_and_a_server_per_language(self):
+        formulae = helix_installer.formulae()
+        self.assertEqual(formulae[0], "helix")
+        for server in ("typescript-language-server", "ty", "ruff", "jdtls",
+                       "bash-language-server", "marksman", "yaml-language-server",
+                       "vscode-langservers-extracted"):
+            self.assertIn(server, formulae)
+        self.assertEqual(len(formulae), len(set(formulae)))
+
+
+class SetupInstallers(unittest.TestCase):
+    def test_linux_runs_yazi_lazygit_and_helix(self):
+        from bootstrap import setup
+        orig = setup.IS_WINDOWS
+        try:
+            setup.IS_WINDOWS = False
+            names = [Path(p).name for p in setup._installers()]
+        finally:
+            setup.IS_WINDOWS = orig
+        self.assertEqual(names, ["install_yazi.py", "install_helix.py", "install_lazygit.py"])
 
 
 if __name__ == "__main__":

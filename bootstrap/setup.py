@@ -20,7 +20,8 @@ def _installers() -> list[str]:
     apps = config.WORKSPACE_ROOT / "applications"
     names = (["powershell/install_powershell.py", "wezterm/install_wezterm.py",
               "wsl/install_wsl.py", "yazi/install_yazi.py"]
-             if IS_WINDOWS else ["yazi/install_yazi.py"])
+             if IS_WINDOWS else ["yazi/install_yazi.py", "helix/install_helix.py",
+                                 "lazygit/install_lazygit.py"])
     return [str(apps / n) for n in names]
 
 

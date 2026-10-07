@@ -68,7 +68,7 @@ workspace-personal/
 |-- tests/                  unittest suite for the core
 |-- setup.sh / setup.bat    launchers
 |-- clone.sh / clone.bat
-|-- applications/           powershell, wezterm, wsl, yazi installers (Python)
+|-- applications/           powershell, wezterm, wsl, yazi, helix, lazygit installers (Python)
 |-- scripts/                PowerShell profile helpers (Windows), validate.ps1, check-remediations.py
 |-- docs/PORTING.md         how to move between OSes, machines and employers
 `-- .denylist.example       copy to .denylist (untracked) to block leaks at commit time
