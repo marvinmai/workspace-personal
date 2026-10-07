@@ -435,7 +435,22 @@ class LazygitInstaller(IsolatedHome):
         self.assertIn("delta ", text)
 
 
-class HelixInstaller(unittest.TestCase):
+class HelixInstaller(IsolatedHome):
+    def test_languages_path_follows_xdg(self):
+        self.assertEqual(helix_installer.languages_path(),
+                         self.home / ".config" / "helix" / "languages.toml")
+
+    @unittest.skipIf(sys.version_info < (3, 11), "tomllib needs Python 3.11")
+    def test_typescript_7_server_comes_first_with_the_classic_fallback(self):
+        import tomllib
+        config = tomllib.loads(helix_installer.LANGUAGES_SOURCE.read_text(encoding="utf-8"))
+        server = config["language-server"]["tsc-lsp"]
+        self.assertEqual([server["command"], *server["args"]],
+                         ["npx", "--no-install", "tsc", "--lsp", "--stdio"])
+        languages = {lang["name"]: lang["language-servers"] for lang in config["language"]}
+        for name in ("typescript", "javascript", "tsx", "jsx"):
+            self.assertEqual(languages[name], ["tsc-lsp", "typescript-language-server"])
+
     def test_installs_helix_and_a_server_per_language(self):
         formulae = helix_installer.formulae()
         self.assertEqual(formulae[0], "helix")

@@ -1,0 +1,26 @@
+# Managed by workspace-personal (applications/helix/install_helix.py).
+
+# TypeScript 7 is a native rewrite without tsserver.js, so
+# typescript-language-server cannot start on it; its own `tsc --lsp --stdio`
+# serves the editor instead. npx runs the project's local tsc. In projects on
+# TypeScript 6 or older, that server fails to start and the classic
+# typescript-language-server answers instead.
+[language-server.tsc-lsp]
+command = "npx"
+args = ["--no-install", "tsc", "--lsp", "--stdio"]
+
+[[language]]
+name = "typescript"
+language-servers = ["tsc-lsp", "typescript-language-server"]
+
+[[language]]
+name = "javascript"
+language-servers = ["tsc-lsp", "typescript-language-server"]
+
+[[language]]
+name = "tsx"
+language-servers = ["tsc-lsp", "typescript-language-server"]
+
+[[language]]
+name = "jsx"
+language-servers = ["tsc-lsp", "typescript-language-server"]
