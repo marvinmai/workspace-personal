@@ -5,7 +5,8 @@ Homebrew is used on Linux because these tools are missing or outdated in the
 apt repos of LTS releases, and `brew upgrade` keeps them current. The helpers
 install Homebrew when it is missing (apt prerequisites, then the official
 installer), add its `shellenv` line to ~/.bashrc and ~/.zshrc, and install
-only the formulae that are not installed yet. Safe to re-run.
+only the formulae that are not installed yet. They also deploy config files,
+asking before replacing one that differs. Safe to re-run.
 """
 
 import os
@@ -66,6 +67,47 @@ def add_shellenv(rc_text, line):
 
 def missing(installed, wanted):
     return [name for name in wanted if name not in installed]
+
+
+def config_home():
+    return Path(os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config"))
+
+
+def config_action(target, source_text):
+    """Return "write" (missing or empty), "unchanged", or "differs"."""
+    if not target.exists():
+        return "write"
+    current = target.read_text(encoding="utf-8")
+    if not current.strip():
+        return "write"
+    return "unchanged" if current == source_text else "differs"
+
+
+def ask(prompt):
+    if not sys.stdin.isatty():
+        return ""
+    try:
+        return input(prompt)
+    except EOFError:
+        return ""
+
+
+def deploy_config_file(source, target):
+    """Copy source to target; ask before replacing a differing file (backup kept)."""
+    source_text = source.read_text(encoding="utf-8")
+    action = config_action(target, source_text)
+    if action == "unchanged":
+        print(f"{target} is up to date.")
+        return
+    if action == "differs":
+        answer = ask(f"{target} differs from {source}. Replace it (backup kept)? [y/N] ")
+        if answer.strip().lower() not in ("y", "yes"):
+            print("Kept the existing config.")
+            return
+        shutil.copy2(target, target.with_name(target.name + ".bak"))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(source_text, encoding="utf-8")
+    print(f"Wrote {target}")
 
 
 def install_brew():

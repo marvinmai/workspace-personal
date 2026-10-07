@@ -365,7 +365,7 @@ class LinkWezterm(IsolatedHome):
             link.shutil.which, link.sys.platform = orig_which, orig_platform
 
 
-class Brew(unittest.TestCase):
+class Brew(IsolatedHome):
     def test_shellenv_line_uses_the_brew_path(self):
         self.assertEqual(brew_common.shellenv_line("/opt/brew/bin/brew"),
                          'eval "$(/opt/brew/bin/brew shellenv)"')
@@ -384,6 +384,16 @@ class Brew(unittest.TestCase):
         rc = '# eval "$(/b/brew shellenv)"\n'
         self.assertIsNotNone(brew_common.add_shellenv(rc, 'eval "$(/b/brew shellenv)"'))
 
+    def test_config_action(self):
+        target = self.home / "config.yml"
+        self.assertEqual(brew_common.config_action(target, "a: 1\n"), "write")
+        target.write_text("", encoding="utf-8")
+        self.assertEqual(brew_common.config_action(target, "a: 1\n"), "write")
+        target.write_text("a: 1\n", encoding="utf-8")
+        self.assertEqual(brew_common.config_action(target, "a: 1\n"), "unchanged")
+        target.write_text("b: 2\n", encoding="utf-8")
+        self.assertEqual(brew_common.config_action(target, "a: 1\n"), "differs")
+
     def test_missing_keeps_the_wanted_order(self):
         self.assertEqual(brew_common.missing({"b", "x"}, ["a", "b", "c"]), ["a", "c"])
 
@@ -395,16 +405,6 @@ class LazygitInstaller(IsolatedHome):
     def test_config_path_follows_xdg(self):
         self.assertEqual(lazygit_installer.config_path(),
                          self.home / ".config" / "lazygit" / "config.yml")
-
-    def test_config_action(self):
-        target = self.home / "config.yml"
-        self.assertEqual(lazygit_installer.config_action(target, "a: 1\n"), "write")
-        target.write_text("", encoding="utf-8")
-        self.assertEqual(lazygit_installer.config_action(target, "a: 1\n"), "write")
-        target.write_text("a: 1\n", encoding="utf-8")
-        self.assertEqual(lazygit_installer.config_action(target, "a: 1\n"), "unchanged")
-        target.write_text("b: 2\n", encoding="utf-8")
-        self.assertEqual(lazygit_installer.config_action(target, "a: 1\n"), "differs")
 
     def test_lg_block_defines_the_shortcut(self):
         block = lazygit_installer.shortcut_block()

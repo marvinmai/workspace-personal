@@ -13,8 +13,6 @@ differs from config.yml is replaced only after asking (the old one is kept as
 config.yml.bak).
 """
 
-import os
-import shutil
 import sys
 from pathlib import Path
 
@@ -29,46 +27,12 @@ SHORTCUT_END = "# <<< lazygit-setup: lg <<<"
 
 
 def config_path():
-    base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(base) / "lazygit" / "config.yml"
-
-
-def config_action(target, source_text):
-    """Return "write" (missing or empty), "unchanged", or "differs"."""
-    if not target.exists():
-        return "write"
-    current = target.read_text(encoding="utf-8")
-    if not current.strip():
-        return "write"
-    return "unchanged" if current == source_text else "differs"
-
-
-def ask(prompt):
-    if not sys.stdin.isatty():
-        return ""
-    try:
-        return input(prompt)
-    except EOFError:
-        return ""
+    return brew_common.config_home() / "lazygit" / "config.yml"
 
 
 def deploy_config():
     brew_common.step("Configuring lazygit")
-    target = config_path()
-    source_text = CONFIG_SOURCE.read_text(encoding="utf-8")
-    action = config_action(target, source_text)
-    if action == "unchanged":
-        print(f"{target} is up to date.")
-        return
-    if action == "differs":
-        answer = ask(f"{target} differs from {CONFIG_SOURCE}. Replace it (backup kept)? [y/N] ")
-        if answer.strip().lower() not in ("y", "yes"):
-            print("Kept the existing config.")
-            return
-        shutil.copy2(target, target.with_name(target.name + ".bak"))
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(source_text, encoding="utf-8")
-    print(f"Wrote {target}")
+    brew_common.deploy_config_file(CONFIG_SOURCE, config_path())
 
 
 def shortcut_block():
