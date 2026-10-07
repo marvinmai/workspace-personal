@@ -406,6 +406,28 @@ class LazygitInstaller(IsolatedHome):
         target.write_text("b: 2\n", encoding="utf-8")
         self.assertEqual(lazygit_installer.config_action(target, "a: 1\n"), "differs")
 
+    def test_lg_block_defines_the_shortcut(self):
+        block = lazygit_installer.shortcut_block()
+        self.assertIn('lg() { lazygit "$@"; }', block)
+        self.assertTrue(block.startswith(lazygit_installer.SHORTCUT_BEGIN))
+        self.assertTrue(block.rstrip("\n").endswith(lazygit_installer.SHORTCUT_END))
+
+    def test_lg_block_is_added_once_and_keeps_user_text(self):
+        block = lazygit_installer.shortcut_block()
+        text = lazygit_installer.upsert_shortcut("alias ll='ls -l'\n")
+        self.assertEqual(text, f"alias ll='ls -l'\n\n{block}")
+        self.assertEqual(lazygit_installer.upsert_shortcut(text), text)
+
+    def test_lg_block_is_replaced_in_place(self):
+        old = (f"a\n{lazygit_installer.SHORTCUT_BEGIN}\nlg() {{ old; }}\n"
+               f"{lazygit_installer.SHORTCUT_END}\nb\n")
+        new = lazygit_installer.upsert_shortcut(old)
+        self.assertEqual(new, f"a\n{lazygit_installer.shortcut_block()}b\n")
+
+    def test_lg_block_without_end_marker_raises(self):
+        with self.assertRaises(ValueError):
+            lazygit_installer.upsert_shortcut(f"{lazygit_installer.SHORTCUT_BEGIN}\nlg\n")
+
     def test_shipped_config_uses_hx_and_delta(self):
         text = lazygit_installer.CONFIG_SOURCE.read_text(encoding="utf-8")
         self.assertIn("editPreset: helix (hx)", text)
