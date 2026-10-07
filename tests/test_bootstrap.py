@@ -34,6 +34,7 @@ def _load_installer(app):
     return module
 
 
+lazygit_installer = _load_installer("lazygit")
 helix_installer = _load_installer("helix")
 brew_common = sys.modules["brew_common"]
 
@@ -387,6 +388,31 @@ class Brew(unittest.TestCase):
         self.assertEqual(brew_common.missing({"b", "x"}, ["a", "b", "c"]), ["a", "c"])
 
 
+class LazygitInstaller(IsolatedHome):
+    def test_installs_lazygit_and_delta(self):
+        self.assertEqual(lazygit_installer.FORMULAE, ["lazygit", "git-delta"])
+
+    def test_config_path_follows_xdg(self):
+        self.assertEqual(lazygit_installer.config_path(),
+                         self.home / ".config" / "lazygit" / "config.yml")
+
+    def test_config_action(self):
+        target = self.home / "config.yml"
+        self.assertEqual(lazygit_installer.config_action(target, "a: 1\n"), "write")
+        target.write_text("", encoding="utf-8")
+        self.assertEqual(lazygit_installer.config_action(target, "a: 1\n"), "write")
+        target.write_text("a: 1\n", encoding="utf-8")
+        self.assertEqual(lazygit_installer.config_action(target, "a: 1\n"), "unchanged")
+        target.write_text("b: 2\n", encoding="utf-8")
+        self.assertEqual(lazygit_installer.config_action(target, "a: 1\n"), "differs")
+
+    def test_shipped_config_uses_hx_and_delta(self):
+        text = lazygit_installer.CONFIG_SOURCE.read_text(encoding="utf-8")
+        self.assertIn("editPreset: helix (hx)", text)
+        self.assertIn("diffRenderers:", text)
+        self.assertIn("delta ", text)
+
+
 class HelixInstaller(unittest.TestCase):
     def test_installs_helix_and_a_server_per_language(self):
         formulae = helix_installer.formulae()
@@ -399,7 +425,7 @@ class HelixInstaller(unittest.TestCase):
 
 
 class SetupInstallers(unittest.TestCase):
-    def test_linux_runs_yazi_and_helix(self):
+    def test_linux_runs_yazi_lazygit_and_helix(self):
         from bootstrap import setup
         orig = setup.IS_WINDOWS
         try:
@@ -407,7 +433,7 @@ class SetupInstallers(unittest.TestCase):
             names = [Path(p).name for p in setup._installers()]
         finally:
             setup.IS_WINDOWS = orig
-        self.assertEqual(names, ["install_yazi.py", "install_helix.py"])
+        self.assertEqual(names, ["install_yazi.py", "install_helix.py", "install_lazygit.py"])
 
 
 if __name__ == "__main__":
